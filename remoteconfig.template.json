@@ -1,0 +1,19 @@
+{
+  "parameters": {
+    "missao_ativa": {
+      "defaultValue": { "value": "false" },
+      "description": "Liga (true) ou desliga (false) a missão surpresa no app.",
+      "valueType": "BOOLEAN"
+    },
+    "missao_estandes": {
+      "defaultValue": { "value": "" },
+      "description": "IDs dos documentos de estandes destacados, separados por vírgula. Ex.: abc123,def456",
+      "valueType": "STRING"
+    },
+    "missao_titulo": {
+      "defaultValue": { "value": "Missão surpresa!" },
+      "description": "Texto da chamada exibida na tela inicial quando a missão está ligada.",
+      "valueType": "STRING"
+    }
+  }
+}

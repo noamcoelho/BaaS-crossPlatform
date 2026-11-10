@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// Circuito de Descobertas — regras do Cloud Firestore
+//
+// - Somente administradores (documento em /admins/{uid}) alteram estandes.
+// - Visitantes autenticados (sessão anônima) listam estandes ativos e
+//   criam check-ins apenas da própria identidade.
+// - A organização lê todos os check-ins para calcular os totais.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function estandeValido(data) {
+      return data.keys().hasAll(['nome', 'descricao', 'localizacao', 'ativo'])
+        && data.keys().hasOnly(['nome', 'descricao', 'localizacao', 'ativo', 'atualizadoEm'])
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 80
+        && data.descricao is string && data.descricao.size() <= 280
+        && data.localizacao is string && data.localizacao.size() <= 80
+        && data.ativo is bool;
+    }
+
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, write: if false; // gerenciado pelo console do Firebase
+    }
+
+    match /estandes/{estandeId} {
+      // get individual liberado para o app distinguir "inativo" de "inexistente"
+      allow get: if signedIn();
+      // listagem: admin vê todos; visitante só consulta com where('ativo', '==', true)
+      allow list: if isAdmin() || (signedIn() && resource.data.ativo == true);
+      allow create, update: if isAdmin() && estandeValido(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /checkins/{checkinId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['visitanteId', 'estandeId', 'criadoEm'])
+        && request.resource.data.visitanteId == request.auth.uid
+        && request.resource.data.estandeId is string
+        && checkinId == request.auth.uid + '_' + request.resource.data.estandeId
+        && request.resource.data.criadoEm == request.time
+        && get(/databases/$(database)/documents/estandes/$(request.resource.data.estandeId)).data.ativo == true;
+
+      // get pelo ID também vale para doc inexistente (verificação de duplicata na transação)
+      allow get: if isAdmin()
+        || (signedIn() && checkinId.matches('^' + request.auth.uid + '_.+$'));
+      allow list: if isAdmin()
+        || (signedIn() && resource.data.visitanteId == request.auth.uid);
+
+      allow update, delete: if false;
+    }
+  }
+}
